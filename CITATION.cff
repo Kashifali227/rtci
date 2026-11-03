@@ -1,0 +1,36 @@
+cff-version: 1.2.0
+message: "If you use rtci in your research, please cite it as below (and GPyT, on which it is built)."
+title: "rtci: a real-time cochlear-implant simulator"
+version: 0.1.0
+license: GPL-3.0-only
+repository-code: "https://github.com/Kashifali227/rtci"
+# doi: TODO -- add the Zenodo DOI after the first GitHub release
+authors:
+  - family-names: "Ali"
+    given-names: "Kashif"
+    email: "kashif.ali@edu.bme.hu"
+    affiliation: "Budapest University of Technology and Economics (BME); NEMO Labs Nonprofit Kft."
+    orcid: "https://orcid.org/0009-0000-7291-204X"
+  - family-names: "Németh"
+    given-names: "Géza"
+    affiliation: "Budapest University of Technology and Economics (BME)"
+    # orcid: "https://orcid.org/XXXX-XXXX-XXXX-XXXX"   TODO add if available
+  - family-names: "Oomen"
+    given-names: "Paul"
+    affiliation: "NEMO Labs Nonprofit Kft."
+    # orcid: "https://orcid.org/XXXX-XXXX-XXXX-XXXX"   TODO add if available
+keywords:
+  - cochlear implant
+  - vocoder
+  - real-time
+  - HiRes Fidelity 120
+  - hearing research
+references:
+  - type: software
+    title: "Generic Python Toolbox (GPyT)"
+    authors:
+      - name: "JAB (GitHub: jabeim)"
+    notes: "Python port of the Advanced Bionics Generic MATLAB Toolbox (GMT)."
+    repository-code: "https://github.com/jabeim/AB-Generic-Python-Toolbox"
+    license: GPL-3.0
+    commit: 56b980eed8babeb54aca1358b5d5c9df1e4bec2f

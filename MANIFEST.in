@@ -1,0 +1,4 @@
+include README.md CHANGELOG.md CONTRIBUTING.md CITATION.cff LICENSE run_ci_simulator.bat
+recursive-include tests *.py
+recursive-include benchmarks *.py
+recursive-include paper *.md *.bib

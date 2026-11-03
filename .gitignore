@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.nbi
+*.nbc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+rtci_demo_out/
+*.wav
+third_party/
+rtci.egg-info/

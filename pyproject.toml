@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rtci"
+dynamic = ["version"]
+description = "Real-time cochlear-implant simulator: streaming GPyT-exact Advanced Bionics HiRes Fidelity 120 strategy with live microphone input, selectable vocoders and plug-in processing blocks"
+readme = "README.md"
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+authors = [{ name = "Kashif Ali", email = "kashif.ali@edu.bme.hu" }, { name = "Géza Németh" }, { name = "Paul Oomen" }]
+keywords = ["cochlear implant", "vocoder", "real-time", "HiRes Fidelity 120", "hearing research", "GPyT"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Medical Science Apps.",
+  "Topic :: Multimedia :: Sound/Audio :: Analysis",
+]
+dependencies = ["numpy>=1.24", "scipy>=1.10", "numba>=0.58", "sounddevice>=0.4.6", "soundfile>=0.12"]
+
+[project.urls]
+Homepage = "https://github.com/Kashifali227/rtci"
+Issues = "https://github.com/Kashifali227/rtci/issues"
+
+[project.optional-dependencies]
+fast = ["icc_rt"]            # Intel SVML: vectorised exp in the GPyT vocoder's neural stage (x86 only)
+test = ["pytest>=7", "h5py"]  # h5py: imported by GPyT (equivalence test)
+
+[project.scripts]
+rtci = "rtci.app:main"
+
+[tool.setuptools]
+packages = ["rtci"]
+
+[tool.setuptools.dynamic]
+version = { attr = "rtci.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
