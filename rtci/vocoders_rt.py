@@ -154,7 +154,8 @@ def _get_kernel(env_hist, env_t0, pulse, offs, step, n1, gauss, halves, ok, acc,
 def _get_emit(acc, m, emitted, w, phi, norm, ok, gain, out):
     """Write m output samples, gain * sum_c norm[c] * acc[c, i] * sin(w[c] * (emitted + i) + phi[c]).
 
-    The carriers run on absolute sample time, so they stay continuous across calls.
+    emitted is counted from the carrier time origin and phi holds the phases there (see AcousticVocoder._rebase),
+    so the carriers stay continuous across calls while the sine arguments stay small.
     """
     for i in range(m):
         out[i] = 0.0
@@ -225,6 +226,8 @@ def _noise_table(fs, edges, seed):
 class AcousticVocoder:
     """Streaming noise-band, sine or GET vocoder that renders F120 stimulation currents as audio at fs_out."""
 
+    REBASE = 2 ** 21          # carrier time origin moves forward every this many output samples, see _rebase()
+
     def __init__(self, kind, fs_out, env_lp=300.0, pulse_rate=100.0, get_l=3.0, seed=0, par=None):
         if kind not in ("noise", "sine", "get"):
             raise ValueError(f"unknown acoustic vocoder {kind!r}")
@@ -264,6 +267,7 @@ class AcousticVocoder:
             self.offs = (np.asarray(p["channelOrder"], float)[:N_CHAN] - 1) / N_CHAN   # stimulation slot / 15
             self.phi = self.rng.uniform(0, 2 * np.pi, N_CHAN)
             self.w = 2 * np.pi * self.fc / self.fs
+            self.t_base, self.phi_base = 0, self.phi.copy()   # carrier time origin and the phases there
             D = get_l / self.fc * self.fs                     # effective Gaussian duration per channel (samples)
             self.halves_arr = np.ceil(1.5 * D).astype(np.int64)   # truncated at +/-1.5 D, as in GETvoc.m
             self.H = int(self.halves_arr.max())               # output lags the envelope by H samples
@@ -318,6 +322,20 @@ class AcousticVocoder:
             return out
         return self.gain * self._get(env, n0, n1)
 
+    def _rebase(self):
+        """Move the GET carrier time origin to the current sample once it is 2**21 samples (~44 s) away.
+
+        Carriers on absolute time have sine arguments that grow without bound, and numba's sin slows down as they
+        grow, so a long live session ran past its block budget. A switch to GET mid-session also starts far from 0.
+        The phase at the new origin is computed in exact rational arithmetic."""
+        if abs(self.emitted - self.t_base) < self.REBASE:
+            return
+        n, fs = self.emitted, Fraction(self.fs).limit_denominator(10 ** 9)
+        cyc = [Fraction(float(f)) * n / fs for f in self.fc]
+        self.phi_base = np.array([(p + 2 * np.pi * float(c - (c.numerator // c.denominator))) % (2 * np.pi)
+                                  for p, c in zip(self.phi, cyc)])
+        self.t_base = n
+
     def _get(self, env, n0, n1):
         self.env_hist = np.concatenate((self.env_hist, env), axis=1)
         need = n1 + self.H + 1 - self.emitted                 # envelopes of pulses < n1 end before n1 + H
@@ -329,7 +347,8 @@ class AcousticVocoder:
         m = n1 - self.H - self.emitted
         out = np.empty(max(m, 0))
         if m > 0:
-            _get_emit(self.acc, m, self.emitted, self.w, self.phi, self.norm, self.ok, 1.0, out)
+            self._rebase()
+            _get_emit(self.acc, m, self.emitted - self.t_base, self.w, self.phi_base, self.norm, self.ok, 1.0, out)
             self.acc = np.concatenate((self.acc[:, m:], np.zeros((N_CHAN, m))), axis=1)
             self.emitted += m
         keep = n1 - self.env_t0                               # every channel is done with pulses before n1

@@ -77,6 +77,22 @@ def test_gpyt_vocoder_n_out_counts_emitted_samples():
     assert v.n_out == total
 
 
+@pytest.mark.parametrize("kind", ["gpyt", "get"])
+def test_carrier_rebasing_keeps_the_output(speech, kind):
+    # Carriers on absolute time slow numba's sin down as a session runs (its arguments grow), so the vocoders
+    # move the time origin forward periodically. Forcing a rebase every 4096 samples must not change the audio.
+    x17 = np.interp(np.arange(0, speech.size, FS_DEV / FS), np.arange(speech.size), speech)
+    outs = []
+    for rebase in (4096, 2 ** 62):
+        p = F.CIProcessor(fs_out=FS_DEV, vocoder=kind)
+        voc = p.vocoder if kind == "gpyt" else p.acoustic
+        voc.REBASE = rebase
+        outs.append(np.concatenate([p.process(x17[i:i + 700]) for i in range(0, x17.size, 700)]))
+        assert (voc.t_base > 0) == (rebase == 4096)
+    assert outs[0].size == outs[1].size
+    assert np.max(np.abs(outs[0] - outs[1])) < 1e-9 * np.max(np.abs(outs[1]))
+
+
 def test_random_carriers_are_seeded_and_leave_the_global_rng_alone():
     np.random.seed(123)
     a = np.random.rand()

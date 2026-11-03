@@ -251,13 +251,14 @@ def _vocoder_kernel(el, normRampT, normOffset, alpha, nl, nlExp, pstate, mAvg, e
 
 @numba.njit(cache=False)   # not cached: a cached caller could link a stale copy of _vocoder_kernel
 def _gpyt_voc_kernel(el, nblk, blk, normRampT, normOffset, alpha, nl, nlExp, pstate, mAvg, Wtone, prev_mag, st,
-                     num, den, fs_float, toneFreqs, phs, tone_ok, gain, out):
+                     num, den, fs_float, toneFreqs, phs, tone_ok, gain, out, t_base):
     """Vocode all complete 278-sample blocks of the electrodogram.
 
     For each block, the neural stage gives the energy, Wtone @ energy gives the tone magnitudes, and the output
     segment between the previous block's anchor and this one is synthesized with the same operation order as
     the per-segment synthesis in GPyT vocoderFunc. st = [blocks done b, has_prev]. Samples per block is the
-    exact ratio num/den. Returns the number of output samples written."""
+    exact ratio num/den. Sample times are counted from t_base, and phs holds the carrier phases at t_base, so
+    the sine arguments stay small (see StreamingVocoder._rebase). Returns the number of output samples written."""
     nR = normOffset.shape[0]
     nT = toneFreqs.shape[0]
     energy = np.empty(nR)
@@ -281,7 +282,7 @@ def _gpyt_voc_kernel(el, nblk, blk, normRampT, normOffset, alpha, nl, nlExp, pst
             hi = -((-b * num) // den)
             x_lo = float((b - 1) * num) / den
             for n in range(lo, hi):
-                tt = n / fs_float
+                tt = (n - t_base) / fs_float
                 v = 0.0
                 for t in range(nT):
                     if tone_ok[t]:
@@ -587,6 +588,8 @@ class StreamingVocoder:
     timing='real' puts block anchors at b*278*18 us, the true pulse timebase. This gives exactly fs_out samples
                   per second of input, so the output does not drift against the sound card."""
 
+    REBASE = 2 ** 21          # carrier time origin moves forward every this many output samples, see _rebase()
+
     def __init__(self, fs_out=48000, timing="real", phases=None, n_carriers=20, gain=OUT_CAL, seed=0):
         captFs = 55556
         captTs = 1 / captFs
@@ -635,6 +638,8 @@ class StreamingVocoder:
         if phases is None:                                    # GPyT draws random carrier phases; we seed them
             phases = 2 * np.pi * np.random.default_rng(seed).random(int(np.floor(nFFT / 2)))
         self.phs = np.asarray(phases, float)[:n_carriers]
+        self.t_base = 0                                       # carrier time origin (output sample index)
+        self.phs_base = self.phs.copy()                       # carrier phases at t_base
         self.pstate = np.zeros(nNeural)                       # GPyT audioPwr[:, 0] carry-over
         self.normOffset1 = np.ascontiguousarray(self.normOffset.ravel())
         self.normRampT = np.ascontiguousarray(self.normRamp.T)   # electrode-major for the neural kernel
@@ -650,6 +655,7 @@ class StreamingVocoder:
         blk_dur = Fraction(278, 55556) if timing == "gpyt" else Fraction(self.blk * PULSE_WIDTH_US, 10 ** 6)
         fs = Fraction(self.fs_out).limit_denominator(10 ** 9) if not isinstance(self.fs_out, Fraction) else self.fs_out
         self.spb = blk_dur * fs                               # output samples per vocoder block (exact)
+        self.fs_exact = fs
         self.fs_float = float(fs)
         self.tone_ok = self.toneFreqs < 0.45 * self.fs_float  # drop carriers that would alias at a low fs_out
 
@@ -666,14 +672,32 @@ class StreamingVocoder:
             self.prev_mag = np.zeros(self.Wtone.shape[0])
             self._st = np.array([self.b, 0], np.int64)
         self._st[0] = self.b
+        self._rebase()
         n = _gpyt_voc_kernel(np.ascontiguousarray(self.elbuf), nblk, self.blk, self.normRampT, self.normOffset1,
                              self.alpha, float(self.nl), self.nlExp, self.pstate, float(self.mAvg), self.Wtone,
-                             self.prev_mag, self._st, num, den, self.fs_float, self.toneFreqs, self.phs,
-                             self.tone_ok, self.gain, out)
+                             self.prev_mag, self._st, num, den, self.fs_float, self.toneFreqs, self.phs_base,
+                             self.tone_ok, self.gain, out, self.t_base)
         self.b = int(self._st[0])
         self.n_out = -((-(self.b - 1) * num) // den) if self._st[1] else 0   # ceil((b-1)*spb), the last anchor
         self.elbuf = self.elbuf[:, nblk * self.blk:]
         return out[:n]
+
+    def _rebase(self):
+        """Move the carrier time origin forward every 2**21 samples (~44 s at 48 kHz).
+
+        The carriers are sin(2 pi f t + phase). Measured from the stream start, the argument grows without bound,
+        and numba's sin slows down as it grows (33 ns per call at start, 57 ns after 10 minutes, 69 ns after 30),
+        which pushed a long live session past its block budget. The phase advance up to the new origin is computed
+        in exact rational arithmetic, so the output is unchanged up to float rounding. Before the first rebase it
+        is bit-identical to synthesis on absolute time, which keeps the GPyT equivalence check exact."""
+        num, den = self.spb.numerator, self.spb.denominator
+        n_now = -((-max(self.b - 1, 0) * num) // den)
+        if n_now - self.t_base < self.REBASE:
+            return
+        cyc = [Fraction(float(f)) * n_now / self.fs_exact for f in self.toneFreqs]
+        self.phs_base = np.array([(p + 2 * np.pi * float(c - (c.numerator // c.denominator))) % (2 * np.pi)
+                                  for p, c in zip(self.phs, cyc)])
+        self.t_base = n_now
 
 class CIProcessor:
     """The full chain from 17.4 kHz audio to vocoded audio at fs_out.
