@@ -4,7 +4,7 @@ title: "rtci: a real-time cochlear-implant simulator"
 version: 0.1.0
 license: GPL-3.0-only
 repository-code: "https://github.com/Kashifali227/rtci"
-# doi: TODO -- add the Zenodo DOI after the first GitHub release
+doi: 10.5281/zenodo.23946047
 authors:
   - family-names: "Ali"
     given-names: "Kashif"
@@ -14,11 +14,11 @@ authors:
   - family-names: "Németh"
     given-names: "Géza"
     affiliation: "Budapest University of Technology and Economics (BME)"
-    # orcid: "https://orcid.org/XXXX-XXXX-XXXX-XXXX"   TODO add if available
+    orcid: "https://orcid.org/0000-0002-2311-4858"
   - family-names: "Oomen"
     given-names: "Paul"
     affiliation: "NEMO Labs Nonprofit Kft."
-    # orcid: "https://orcid.org/XXXX-XXXX-XXXX-XXXX"   TODO add if available
+    orcid: "https://orcid.org/0000-0003-3001-4385"
 keywords:
   - cochlear implant
   - vocoder

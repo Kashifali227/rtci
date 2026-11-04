@@ -1,5 +1,7 @@
 # rtci: a real-time cochlear-implant simulator
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23946047.svg)](https://doi.org/10.5281/zenodo.23946047)
+
 rtci turns a laptop and a headset into a live cochlear-implant (CI) simulator. Microphone audio is processed by a
 streaming implementation of the Advanced Bionics HiRes Fidelity 120 (F120) sound-coding strategy, rendered through
 a CI vocoder, and played to the headphones. With a USB audio interface, the total latency is about 55–60 ms.
